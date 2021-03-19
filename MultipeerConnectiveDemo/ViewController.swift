@@ -135,6 +135,7 @@ extension ViewController: MCBrowserViewControllerDelegate {
         print(#function)
         messages.append((#function))
         tableView.reloadData()
+        dismiss(animated: true, completion: nil)
     }
     
     func browserViewControllerWasCancelled(_ browserViewController: MCBrowserViewController) {
