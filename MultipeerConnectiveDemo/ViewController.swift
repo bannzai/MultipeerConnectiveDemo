@@ -18,26 +18,28 @@ class ViewController: UIViewController {
     var messages: [String] = []
     var serviceType: String { "bannzai-p2p" }
     
-    let peerID = MCPeerID(displayName: UIDevice.current.name)
+    let peerID = MCPeerID(displayName: UUID().uuidString)
     lazy var session: MCSession = {
         let session = MCSession(peer: peerID)
         return session
     }()
-    lazy var advertiser: MCAdvertiserAssistant = {
-        let advertiser = MCAdvertiserAssistant(serviceType: serviceType, discoveryInfo: ["name": "bannzai"], session: session)
+    lazy var advertiser: MCNearbyServiceAdvertiser = {
+        let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: ["name": "bannzai"], serviceType: serviceType)
         return advertiser
     }()
+    lazy var browser: MCNearbyServiceBrowser = .init(peer: peerID, serviceType: serviceType)
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        messages.append(peerID.displayName)
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(TableViewCell.classForCoder(), forCellReuseIdentifier: "TableViewCell")
 
         session.delegate = self
         advertiser.delegate = self
-        advertiser.start()
+        advertiser.startAdvertisingPeer()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -47,9 +49,8 @@ class ViewController: UIViewController {
     }
     
     @objc func browserButtonPressed() {
-        let browserViewController: MCBrowserViewController = .init(serviceType: serviceType, session: session)
-        browserViewController.delegate = self
-        present(browserViewController, animated: true, completion: nil)
+        browser.delegate = self
+        browser.startBrowsingForPeers()
     }
 }
 
@@ -137,26 +138,46 @@ extension ViewController: MCAdvertiserAssistantDelegate {
     }
 }
 
-extension ViewController: MCBrowserViewControllerDelegate {
-    func browserViewControllerDidFinish(_ browserViewController: MCBrowserViewController) {
-        print(#function)
-        messages.append((#function))
-        tableView.reloadData()
+extension ViewController: MCNearbyServiceAdvertiserDelegate {
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        invitationHandler(true, session)
+        DispatchQueue.main.async {
+            print(#function, peerID, String(describing: context))
+            self.messages.append(join(#function, peerID, String(describing: context)))
+            self.tableView.reloadData()
+        }
     }
-    
-    func browserViewControllerWasCancelled(_ browserViewController: MCBrowserViewController) {
-        print(#function)
-        browserViewController.dismiss(animated: true, completion: nil)
-        messages.append((#function))
-        tableView.reloadData()
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
+        DispatchQueue.main.async {
+            print(#function, error)
+            self.messages.append(join(#function, error))
+            self.tableView.reloadData()
+        }
     }
-    func browserViewController(_ browserViewController: MCBrowserViewController, shouldPresentNearbyPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) -> Bool {
+}
+
+extension ViewController: MCNearbyServiceBrowserDelegate {
+    func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
+        DispatchQueue.main.async {
+            print(#function)
+            self.messages.append((#function))
+            self.tableView.reloadData()
+        }
+    }
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        DispatchQueue.main.async {
+            print(#function)
+            self.messages.append((#function))
+            self.tableView.reloadData()
+        }
+    }
+    func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
+        browser.invitePeer(peerID, to: session, withContext: "this is data".data(using: .utf8), timeout: 4)
         DispatchQueue.main.async {
             print(#function, peerID, String(describing: info))
             self.messages.append(join(#function, peerID, String(describing: info)))
             self.tableView.reloadData()
         }
-        return true
     }
 }
 
