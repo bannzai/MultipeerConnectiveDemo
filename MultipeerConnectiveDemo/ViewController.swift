@@ -17,8 +17,9 @@ class ViewController: UIViewController {
 
     var messages: [String] = []
     var serviceType: String { "bannzai-p2p" }
+    var connectedPeerIDs: [MCPeerID] = []
     
-    let peerID = MCPeerID(displayName: UIDevice.current.name)
+    let peerID = MCPeerID(displayName: UUID().uuidString)
     lazy var session: MCSession = {
         let session = MCSession(peer: peerID)
         return session
@@ -31,6 +32,7 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        messages.append("me: \(peerID.displayName)")
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(TableViewCell.classForCoder(), forCellReuseIdentifier: "TableViewCell")
@@ -42,11 +44,30 @@ class ViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        navigationItem.rightBarButtonItem = .init(title: "Browser", style: .plain, target: self, action: #selector(browserButtonPressed))
+        navigationItem.rightBarButtonItems = [
+            .init(title: "Browse", style: .plain, target: self, action: #selector(browseButtonPressed)),
+            .init(title: "Send", style: .plain, target: self, action: #selector(sendButtonPressed)),
+        ]
         tableView.reloadData()
     }
     
-    @objc func browserButtonPressed() {
+    @objc func sendButtonPressed() {
+        if connectedPeerIDs.isEmpty {
+            return
+        }
+        let image = UIImage(named: "bannzai")!
+        do {
+            try session.send(
+                image.jpegData(compressionQuality: 0.5)!,
+                toPeers: connectedPeerIDs,
+                with: .reliable
+            )
+        } catch {
+            print(error)
+        }
+    }
+    
+    @objc func browseButtonPressed() {
         let browserViewController: MCBrowserViewController = .init(serviceType: serviceType, session: session)
         browserViewController.delegate = self
         present(browserViewController, animated: true, completion: nil)
@@ -54,10 +75,6 @@ class ViewController: UIViewController {
 }
 
 extension ViewController: UITableViewDataSource, UITableViewDelegate {
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 100
-    }
-
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         messages.count
     }
@@ -76,6 +93,16 @@ extension ViewController: MCSessionDelegate {
             self.messages.append(join(#function, peerID, state.rawValue))
             self.tableView.reloadData()
         }
+        switch state {
+        case .notConnected:
+            connectedPeerIDs.removeAll()
+        case .connecting:
+            break
+        case .connected:
+            connectedPeerIDs.append(peerID)
+        @unknown default:
+            fatalError("unexpected state \(state.rawValue)")
+        }
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
@@ -83,6 +110,17 @@ extension ViewController: MCSessionDelegate {
             print(#function, data, peerID)
             self.messages.append(join(#function, data, peerID))
             self.tableView.reloadData()
+        }
+        
+        DispatchQueue.main.async {
+            let image = UIImage(data: data)
+            let imageView = UIImageView(image: image)
+            imageView.center = self.view.center
+            self.view.addSubview(imageView)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                imageView.removeFromSuperview()
+            }
         }
     }
     
@@ -127,6 +165,9 @@ extension ViewController: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         print(#function)
         invitationHandler(true, session)
+        DispatchQueue.main.async {
+            self.messages.append(#function)
+        }
     }
 }
 
