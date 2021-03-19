@@ -23,21 +23,21 @@ class ViewController: UIViewController {
         let session = MCSession(peer: peerID)
         return session
     }()
-    lazy var advertiser: MCAdvertiserAssistant = {
-        let advertiser = MCAdvertiserAssistant(serviceType: serviceType, discoveryInfo: ["name": "bannzai"], session: session)
+    lazy var advertiser: MCNearbyServiceAdvertiser = {
+        let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: nil, serviceType: serviceType)
         return advertiser
     }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(TableViewCell.classForCoder(), forCellReuseIdentifier: "TableViewCell")
 
         session.delegate = self
         advertiser.delegate = self
-        advertiser.start()
+        advertiser.startAdvertisingPeer()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -120,20 +120,13 @@ extension ViewController: MCSessionDelegate {
     }
 }
 
-extension ViewController: MCAdvertiserAssistantDelegate {
-    func advertiserAssistantDidDismissInvitation(_ advertiserAssistant: MCAdvertiserAssistant) {
-        DispatchQueue.main.async {
-            print(#function)
-            self.messages.append((#function))
-            self.tableView.reloadData()
-        }
+extension ViewController: MCNearbyServiceAdvertiserDelegate {
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
+
     }
-    func advertiserAssistantWillPresentInvitation(_ advertiserAssistant: MCAdvertiserAssistant) {
-        DispatchQueue.main.async {
-            print(#function)
-            self.messages.append((#function))
-            self.tableView.reloadData()
-        }
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        print(#function)
+        invitationHandler(true, session)
     }
 }
 
